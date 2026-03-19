@@ -24,7 +24,7 @@ module power_calc (
   end
 endmodule
 
-module tt_um_liamolucko_vga(
+module tt_um_maluei_badstripes(
   input  wire [7:0] ui_in,
   output wire [7:0] uo_out,
   input  wire [7:0] uio_in,
