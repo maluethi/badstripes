@@ -65,11 +65,8 @@ module tt_um_maluei_badstripes(
   reg signed [17:0] nco_x;
   reg signed [17:0] nco_y;
 
-  wire [3:0] shift_x = cfg_osc_x_speed ? 4'd8 : 4'd6;
-  wire [3:0] shift_y = cfg_osc_y_speed ? 4'd8 : 4'd6;
-
-  wire signed [17:0] nco_x_delta = nco_y >>> shift_y;
-  wire signed [17:0] nco_y_delta = nco_x >>> shift_x;
+  wire signed [17:0] nco_x_delta = cfg_osc_x_speed ? (nco_y >>> 8) : (nco_y >>> 6);
+  wire signed [17:0] nco_y_delta = cfg_osc_y_speed ? (nco_x >>> 8) : (nco_x >>> 6);
 
   always @(posedge vsync, negedge rst_n) begin
     if (~rst_n) begin
