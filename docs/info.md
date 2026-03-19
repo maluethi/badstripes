@@ -13,7 +13,7 @@ makes some stripes or other pattern on the vga channels. don't know this is a go
 
 ## How to test
 
-Explain how to use your project
+Plug it in
 
 ## External hardware
 
