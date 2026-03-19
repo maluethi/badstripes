@@ -1,28 +1,27 @@
 /*
- * Copyright (c) 2024 M.Luethi
+ * Copyright (c) 2024 M.Luthi
  * SPDX-License-Identifier: Apache-2.0
  */
 
 `default_nettype none
 
 module power_calc (
-  input  signed [10:0]      x,
+  input  signed [10:0]     x,
   input  [1:0]             sel,
   output reg signed [16:0] result
 );
-  wire signed [16:0] sq   = x * x;
-  wire signed [16:0] cube = sq * x;
-  wire signed [16:0] quad = sq * sq;
+  wire signed [16:0] sq = x * x;
 
   always @(*) begin
     case (sel)
       2'd0: result = sq;
-      2'd1: result = cube;
-      2'd2: result = quad;
-      default: result = {{7{x[9]}}, x};
+      2'd1: result = ~sq;
+      2'd2: result = sq ^ {sq[8:0], sq[16:9]};
+      default: result = {{6{x[10]}}, x};
     endcase
   end
 endmodule
+
 
 module tt_um_maluei_badstripes(
   input  wire [7:0] ui_in,
@@ -46,13 +45,12 @@ module tt_um_maluei_badstripes(
   wire [9:0] pix_y;
 
   // Configuration
-  wire [1:0] cfg_power_sel      = {ui_in[1], ui_in[0]};  // power function select
-  wire       cfg_osc_x          = ui_in[2];               // enable x oscillation
-  wire       cfg_osc_y          = ui_in[3];               // enable y oscillation
-  wire       cfg_centred_y_mode = ui_in[4];               // truncated vs full centred_y
-  wire       cfg_osc_x_speed    = ui_in[5];               // x osc speed: 0=fast 1=slow
-  wire       cfg_osc_y_speed    = ui_in[6];               // y osc speed: 0=fast 1=slow
-  // ui_in[7] free
+  wire [1:0] cfg_power_sel   = {ui_in[1], ui_in[0]};  // power function select
+  wire       cfg_osc_x       = ui_in[2];               // enable x oscillation
+  wire       cfg_osc_y       = ui_in[3];               // enable y oscillation
+  wire       cfg_osc_x_speed = ui_in[4];               // x osc speed: 0=fast 1=slow
+  wire       cfg_osc_y_speed = ui_in[5];               // y osc speed: 0=fast 1=slow
+  // ui_in[7:6] free
 
   // TinyVGA PMOD
   assign uo_out = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
@@ -63,23 +61,19 @@ module tt_um_maluei_badstripes(
 
   reg [10:0] counter;
 
-  // NCO: coupled accumulator oscillator — no LUT, just two adders
-  // Traces a circle in (nco_x, nco_y) space
-  // x' = x - y>>k,  y' = y + x>>k
-  // shift amount controls speed: 6=fast, 7=medium, 8=slow
+  // NCO: coupled accumulator oscillator — 18-bit for good oscillation quality
   reg signed [17:0] nco_x;
   reg signed [17:0] nco_y;
 
-  wire [4:0] shift_x = cfg_osc_x_speed ? 5'd8 : 5'd6;
-  wire [4:0] shift_y = cfg_osc_y_speed ? 5'd8 : 5'd6;
+  wire [3:0] shift_x = cfg_osc_x_speed ? 4'd8 : 4'd6;
+  wire [3:0] shift_y = cfg_osc_y_speed ? 4'd8 : 4'd6;
 
-  // Per-axis shifted values for independent speed control
-  wire signed [17:0] nco_x_delta = nco_y >>> shift_y;  // how much x changes (driven by y speed)
-  wire signed [17:0] nco_y_delta = nco_x >>> shift_x;  // how much y changes (driven by x speed)
+  wire signed [17:0] nco_x_delta = nco_y >>> shift_y;
+  wire signed [17:0] nco_y_delta = nco_x >>> shift_x;
 
   always @(posedge vsync, negedge rst_n) begin
     if (~rst_n) begin
-      nco_x <= 18'sh01000;  // non-zero initial condition
+      nco_x <= 18'sh01000;
       nco_y <= 18'sh00000;
     end else begin
       nco_x <= nco_x - nco_x_delta;
@@ -87,7 +81,7 @@ module tt_um_maluei_badstripes(
     end
   end
 
-  // Use upper bits as oscillation offset (±127 pixel range)
+  // Use upper bits as oscillation offset (±512 pixel range)
   wire signed [9:0] osc_x = cfg_osc_x ? nco_x[16:7] : 10'sd0;
   wire signed [9:0] osc_y = cfg_osc_y ? nco_y[16:7] : 10'sd0;
 
@@ -101,21 +95,17 @@ module tt_um_maluei_badstripes(
     .vpos(pix_y)
   );
 
-  // centred_x/y: pixel position relative to screen centre plus oscillation
-wire signed [10:0] centred_x = $signed({1'b0, pix_x}) + 11'sd180 + {osc_x[9], osc_x};
-wire signed [10:0] centred_y_full = $signed({1'b0, pix_y}) + 11'sd240 + {osc_y[9], osc_y};
-wire signed [1:0]  centred_y_trunc = $signed({1'b0, pix_y}) + 11'sd240 + {osc_y[9], osc_y};
-wire signed [10:0] centred_y = cfg_centred_y_mode
-                             ? {{9{centred_y_trunc[1]}}, centred_y_trunc}
-                             : centred_y_full;
+  // centred_x/y in 11 bits to avoid overflow warnings
+  wire signed [10:0] centred_x = $signed({1'b0, pix_x}) + 11'sd180 + {osc_x[9], osc_x};
+  wire signed [10:0] centred_y = $signed({1'b0, pix_y}) + 11'sd240 + {osc_y[9], osc_y};
 
   wire signed [10:0] sq_in;
   wire signed [16:0] sq_out;
   reg  signed [16:0] centred_x_sq;
   reg  signed [16:0] centred_y_sq;
 
-  assign sq_in = pix_x == 640 ? (pix_y == 524 ? -240 : centred_y + 1)
-                               : (pix_x == 799 ? -2   : centred_x + 1);
+  assign sq_in = pix_x == 640 ? (pix_y == 524 ? -11'sd240 : centred_y + 11'sd1)
+                               : (pix_x == 799 ? -11'sd2   : centred_x + 11'sd1);
 
   power_calc power_inst (
     .x      (sq_in),
@@ -149,6 +139,6 @@ wire signed [10:0] centred_y = cfg_centred_y_mode
   end
 
   // Suppress unused signals warning
-  wire _unused_ok = &{ena, ui_in[7], uio_in, pix_y};
+  wire _unused_ok = &{ena, ui_in[7:6], uio_in, pix_y};
 
 endmodule
