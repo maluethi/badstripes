@@ -109,12 +109,6 @@ wire signed [10:0] centred_y = cfg_centred_y_mode
                              ? {{9{centred_y_trunc[1]}}, centred_y_trunc}
                              : centred_y_full;
 
-  wire signed [9:0] centred_y_full  = $signed({1'b0, pix_y}) + 10'sd240 + osc_y;
-  wire signed [1:0] centred_y_trunc = $signed({1'b0, pix_y}) + 10'sd240 + osc_y;
-  wire signed [9:0] centred_y = cfg_centred_y_mode
-                               ? {{8{centred_y_trunc[1]}}, centred_y_trunc}
-                               : centred_y_full;
-
   wire signed [10:0] sq_in;
   wire signed [16:0] sq_out;
   reg  signed [16:0] centred_x_sq;
