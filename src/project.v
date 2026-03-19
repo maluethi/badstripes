@@ -45,12 +45,10 @@ module tt_um_maluei_badstripes(
   wire [9:0] pix_y;
 
   // Configuration
-  wire [1:0] cfg_power_sel   = {ui_in[1], ui_in[0]};  // power function select
-  wire       cfg_osc_x       = ui_in[2];               // enable x oscillation
-  wire       cfg_osc_y       = ui_in[3];               // enable y oscillation
-  wire       cfg_osc_x_speed = ui_in[4];               // x osc speed: 0=fast 1=slow
-  wire       cfg_osc_y_speed = ui_in[5];               // y osc speed: 0=fast 1=slow
-  // ui_in[7:6] free
+  wire [1:0] cfg_power_sel = {ui_in[1], ui_in[0]};  // power function select
+  wire       cfg_osc_x     = ui_in[2];               // enable x oscillation
+  wire       cfg_osc_y     = ui_in[3];               // enable y oscillation
+  // ui_in[7:4] free
 
   // TinyVGA PMOD
   assign uo_out = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
@@ -61,12 +59,13 @@ module tt_um_maluei_badstripes(
 
   reg [10:0] counter;
 
-  // NCO: coupled accumulator oscillator — 18-bit for good oscillation quality
+  // NCO: coupled accumulator oscillator
+  // Fixed shifts — free in hardware, no barrel shifter needed
   reg signed [17:0] nco_x;
   reg signed [17:0] nco_y;
 
-  wire signed [17:0] nco_x_delta = cfg_osc_x_speed ? (nco_y >>> 8) : (nco_y >>> 6);
-  wire signed [17:0] nco_y_delta = cfg_osc_y_speed ? (nco_x >>> 8) : (nco_x >>> 6);
+  wire signed [17:0] nco_x_delta = nco_y >>> 7;
+  wire signed [17:0] nco_y_delta = nco_x >>> 7;
 
   always @(posedge vsync, negedge rst_n) begin
     if (~rst_n) begin
@@ -78,7 +77,7 @@ module tt_um_maluei_badstripes(
     end
   end
 
-  // Use upper bits as oscillation offset (±512 pixel range)
+  // Use upper bits as oscillation offset
   wire signed [9:0] osc_x = cfg_osc_x ? nco_x[16:7] : 10'sd0;
   wire signed [9:0] osc_y = cfg_osc_y ? nco_y[16:7] : 10'sd0;
 
@@ -136,6 +135,6 @@ module tt_um_maluei_badstripes(
   end
 
   // Suppress unused signals warning
-  wire _unused_ok = &{ena, ui_in[7:6], uio_in, pix_y};
+  wire _unused_ok = &{ena, ui_in[7:4], uio_in, pix_y};
 
 endmodule
