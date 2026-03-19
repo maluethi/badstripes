@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2024 Uri Shaked
+ * Copyright (c) 2024 M.Luethi
  * SPDX-License-Identifier: Apache-2.0
  */
 
 `default_nettype none
 
 module power_calc (
-  input  signed [9:0]      x,
+  input  signed [10:0]      x,
   input  [1:0]             sel,
   output reg signed [16:0] result
 );
@@ -102,7 +102,12 @@ module tt_um_maluei_badstripes(
   );
 
   // centred_x/y: pixel position relative to screen centre plus oscillation
-  wire signed [9:0] centred_x = $signed({1'b0, pix_x}) + 10'sd180 + osc_x;
+wire signed [10:0] centred_x = $signed({1'b0, pix_x}) + 11'sd180 + {osc_x[9], osc_x};
+wire signed [10:0] centred_y_full = $signed({1'b0, pix_y}) + 11'sd240 + {osc_y[9], osc_y};
+wire signed [1:0]  centred_y_trunc = $signed({1'b0, pix_y}) + 11'sd240 + {osc_y[9], osc_y};
+wire signed [10:0] centred_y = cfg_centred_y_mode
+                             ? {{9{centred_y_trunc[1]}}, centred_y_trunc}
+                             : centred_y_full;
 
   wire signed [9:0] centred_y_full  = $signed({1'b0, pix_y}) + 10'sd240 + osc_y;
   wire signed [1:0] centred_y_trunc = $signed({1'b0, pix_y}) + 10'sd240 + osc_y;
@@ -110,7 +115,7 @@ module tt_um_maluei_badstripes(
                                ? {{8{centred_y_trunc[1]}}, centred_y_trunc}
                                : centred_y_full;
 
-  wire signed [9:0] sq_in;
+  wire signed [10:0] sq_in;
   wire signed [16:0] sq_out;
   reg  signed [16:0] centred_x_sq;
   reg  signed [16:0] centred_y_sq;
